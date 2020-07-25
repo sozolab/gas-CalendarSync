@@ -3,8 +3,6 @@ var sheet = ss.getActiveSheet();
 
 var properties = PropertiesService.getScriptProperties();
 
-var calendarId = "ki8ogsnb2ibsfh1377di9gf0kc@group.calendar.google.com";
-
 
 
 /**
@@ -29,7 +27,7 @@ function onEditTrigger(e){
   var cell = e.range;
 
   
-  var attr = getAttr(x);
+  var attr = getAttr(sheet, x);
   
   if (attr=="カレンダー送信"){
     if (cell.getValue()==true){
@@ -44,21 +42,23 @@ function onEditTrigger(e){
 
 function setStaffCalendar(y,x, cell){
   cell.setValue(false);
-  var user = getKey(y);
+  var user = getKey(sheet, y);
   var name = "出勤可能時間（"+user+"）";
  
   var ret = Browser.msgBox(user+"さんにGoogleカレンダーを送りますか?", Browser.Buttons.OK_CANCEL);
   if (ret=='cancel') return;
 
-  var idCell = getAttrValueCell(y, "カレンダーID");
+  var idCell = getAttrValueCell(sheet, y, "カレンダーID");
   if (idCell.isBlank()){ //空なら作成
     
     var calendar = CalendarApp.createCalendar(name);
     var id = calendar.getId();
     
+    setCalendarTrigger(id);
+    
     idCell.setValue(id);  
     
-    var urlCell = getAttrValueCell(y, "カレンダーURL");
+    var urlCell = getAttrValueCell(sheet, y, "カレンダーURL");
     var url = "https://calendar.google.com/calendar/embed?src="+id;
     urlCell.setValue(url);
 
@@ -66,7 +66,7 @@ function setStaffCalendar(y,x, cell){
   
   var id = idCell.getValue();
   var calendar = CalendarApp.getCalendarById(id);
-  var email = getAttrValueCell(y, "gmail").getValue();
+  var email = getAttrValueCell(sheet, y, "gmail").getValue();
   
   shareStaffCalendar(calendar, email);
   
@@ -89,22 +89,24 @@ function shareStaffCalendar(calendar, email){
 function deleteStaffCalendar(y,x, cell){
   cell.setValue(false);
 
-  var name = "出勤可能時間（"+getKey(y)+"）";
+  var name = "出勤可能時間（"+getKey(sheet, y)+"）";
   var ret = Browser.msgBox("カレンダー「"+name+"」を削除しますか? この操作は元に戻せません。", Browser.Buttons.OK_CANCEL);
   if (ret=='cancel') {
     return;
   }
 
   
-  var idCell = getAttrValueCell(y, "カレンダーID");
+  var idCell = getAttrValueCell(sheet, y, "カレンダーID");
   var id = idCell.getValue();
   
   var calendar = CalendarApp.getCalendarById(id);
   calendar.deleteCalendar();
   
+  deleteCalendarTrigger(id);
+  
   idCell.clearContent();
 
-  var urlCell = getAttrValueCell(y, "カレンダーURL");
+  var urlCell = getAttrValueCell(sheet, y, "カレンダーURL");
   urlCell.clearContent();
   
   
@@ -112,9 +114,11 @@ function deleteStaffCalendar(y,x, cell){
 
 
 /** カレンダーが編集されたとき **/
-function onCalendarEdit() {
+function onCalendarEdit(e) {
   //このトリガーの場合はカレンダーをIDで開く必要がある。
   var ss = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1qzvi4JiZBuEEgLf8GHVsS3KLRIyH1e9ywK-HoXWYw7g/edit#gid=951613234");
+  var calendarId = e.calendarId;
+  Logger.log(calendarId);
   var events = Calendar.Events.list(calendarId, getSyncToken(calendarId));
  
   var items = events.items;
@@ -137,9 +141,9 @@ function onCalendarEdit() {
     
     // TODO ここにスプレッドシートの内容を更新する処理を書こう
     Logger.log(title);
-    Logger.log(startDate);
-    Logger.log(startTime);
-    addSchedule(items[i]);
+    Logger.log(location);
+    Logger.log(status);
+    updateSchedule(items[i]);
                      
   }
   
@@ -185,25 +189,42 @@ function formatTime(eventDate){
   var time = Utilities.formatDate(new Date(eventDate.dateTime), "Asia/Tokyo", "HH:mm");
   return time;
 }
-  
 
-function addSchedule(event){
+
+var scheduleSheet = ss.getSheetByName("スケジュール");
+var eventX = 5;
+var eventColSize=7;
+
+
+function updateSchedule(event){
+  var id = event.iCalUID;
+  Logger.log("id:"+id);
+  var x = getAttrX(scheduleSheet, "イベントID");
+  Logger.log("x:"+x);
+
+  var y = getY(scheduleSheet, "イベントID", id);
+  Logger.log("y:"+y);
   
-  var sheet = ss.getSheetByName("スケジュール");
-  var y = sheet.getLastRow();
-  var x = 5;
-  Logger.log(y);
+  if (y<0){ //if not found
+    y = scheduleSheet.getLastRow()+1; //new row
+  }
   
-  var range = sheet.getRange(y+1,x, 1, 5);//次の行
+  var range = scheduleSheet.getRange(y,eventX, 1, eventColSize);//次の行
   range.setValues([[
     "",
+    event.summary,
+    id, 
     formatDate(event.start),
     formatTime(event.start),
     formatTime(event.end),
     ""
-  ]])
+  ]]);
+  
   
 }
+
+
+
 
 
 /** 
@@ -213,3 +234,34 @@ function msg(value){
   Browser.msgBox(value);
 }
 
+
+//TODO: 権限管理
+// カレンダー編集時のトリガーを設定
+function setCalendarTrigger(calendarId){
+
+  // これを実行している人のメールアドレス
+  var email = Session.getActiveUser().getEmail();
+  if( email === "<mail_address>"){
+    // 正常処理
+  }else{
+    // 異常検知処理
+//    return ;
+  }
+
+  ScriptApp
+  .newTrigger("onCalendarEdit")
+  .forUserCalendar(calendarId)
+  .onEventUpdated()
+  .create();
+
+}
+
+function deleteCalendarTrigger(calendarId){
+  var triggers = ScriptApp.getProjectTriggers();
+  for( var i = 0; i < triggers.length; ++i ){
+    var trigger = triggers[i];
+    if (trigger.getTriggerSourceId()==calendarId){
+      ScriptApp.deleteTrigger(trigger);
+    }
+  }
+}
