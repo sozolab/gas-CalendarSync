@@ -6,6 +6,7 @@ var properties = PropertiesService.getScriptProperties();
 var calendarId = "ki8ogsnb2ibsfh1377di9gf0kc@group.calendar.google.com";
 
 
+
 /**
  * スプレッドシート表示の際に呼出し
  */
@@ -18,6 +19,7 @@ function onOpen() {
   });
   
   ss.addMenu("カレンダー", subMenus);
+  
 }
 
 
@@ -44,8 +46,8 @@ function setStaffCalendar(y,x, cell){
   cell.setValue(false);
   var user = getKey(y);
   var name = "出勤可能時間（"+user+"）";
-  
-  var ret = Browser.msgBox(name+"さんにGoogleカレンダーを送りますか?", Browser.Buttons.OK_CANCEL);
+ 
+  var ret = Browser.msgBox(user+"さんにGoogleカレンダーを送りますか?", Browser.Buttons.OK_CANCEL);
   if (ret=='cancel') return;
 
   var idCell = getAttrValueCell(y, "カレンダーID");
@@ -113,7 +115,7 @@ function deleteStaffCalendar(y,x, cell){
 function onCalendarEdit() {
   //このトリガーの場合はカレンダーをIDで開く必要がある。
   var ss = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1qzvi4JiZBuEEgLf8GHVsS3KLRIyH1e9ywK-HoXWYw7g/edit#gid=951613234");
-  var events = Calendar.Events.list(calendarId, getSyncToken());
+  var events = Calendar.Events.list(calendarId, getSyncToken(calendarId));
  
   var items = events.items;
   
@@ -141,21 +143,25 @@ function onCalendarEdit() {
                      
   }
   
-  setSyncToken(events);
+  setSyncToken(events, calendarId);
 }
 
 
 /** Initial Sync Token**/
-function initialSync() {
-  var items = Calendar.Events.list("メモしたカレンダーID");
+function initialSync(calendarId) {
+  var items = Calendar.Events.list(calendarId);
   var nextSyncToken = items.nextSyncToken;
-  var properties = PropertiesService.getScriptProperties();
-  properties.setProperty("syncToken", nextSyncToken);
+  properties.setProperty(getSyncKey(calendarId), nextSyncToken);
+}
+
+
+function getSyncKey(calendarId){
+  return "syncToken:"+calendarId;
 }
 
 /** get Sync Token **/
-function getSyncToken(){
-  var nextSyncToken = properties.getProperty("syncToken");
+function getSyncToken(calendarId){
+  var nextSyncToken = properties.getProperty(getSyncKey(calendarId));
   var optionalArgs = {
     syncToken: nextSyncToken
   };
@@ -163,10 +169,10 @@ function getSyncToken(){
 }
 
 /** set Sync Token for next **/
-function setSyncToken(events){
+function setSyncToken(events, calendarId){
 
   var nextSyncToken = events["nextSyncToken"];
-  properties.setProperty("syncToken", nextSyncToken);
+  properties.setProperty(getSyncKey(calendarId), nextSyncToken);
 }
 
 
