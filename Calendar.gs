@@ -100,7 +100,7 @@ function deleteStaffCalendar(y,x, cell){
   var id = idCell.getValue();
   
   var calendar = CalendarApp.getCalendarById(id);
-  calendar.deleteCalendar();
+  if (calendar != null) calendar.deleteCalendar();
   
   deleteCalendarTrigger(id);
   
@@ -124,25 +124,11 @@ function onCalendarEdit(e) {
   var items = events.items;
   
   for (var i = 0; i < items.length; i++) {
-    // イベントID
-    var eventId = items[i].iCalUID;
-    // イベントのタイトル
-    var title = items[i].summary;
     // 場所
     var location = items[i].location;
-    // 開始日
-    var startDate = formatDate(items[i].start);
-    // 開始時間
-    var startTime = formatTime(items[i].start);
-    // 終了時間
-    var endTime = formatTime(items[i].end);
     // ステータス
     var status = items[i].status;
     
-    // TODO ここにスプレッドシートの内容を更新する処理を書こう
-    Logger.log(title);
-    Logger.log(location);
-    Logger.log(status);
     updateSchedule(items[i]);
                      
   }

@@ -13,8 +13,8 @@ function getKey(sheet, y){
 function getAttrValueCell(sheet, y, attr){
   var x = getAttrX(sheet, attr);
   
-  if (x>-1) {
-    return sheet.getRange(y,x+1);
+  if (x>0) {
+    return sheet.getRange(y,x);
   }
 }
 
